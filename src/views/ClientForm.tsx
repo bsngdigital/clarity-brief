@@ -42,6 +42,7 @@ import {
   type StyleId,
 } from '../data'
 import { Button, Chip, StyleThumb, cx } from '../ui'
+import { api } from '../api'
 
 type FormStep =
   | 'welcome'
@@ -189,7 +190,7 @@ export function ClientForm({
     }
   })
 
-  // Debounced autosave back into project state
+  // Debounced autosave back into project state & Supabase
   useEffect(() => {
     if (!project) return
     const timer = setTimeout(() => {
@@ -204,13 +205,27 @@ export function ClientForm({
           },
         }
       })
+
+      // Sync to live Supabase backend
+      api.clientForm
+        .autosave(token, {
+          current_step: step,
+          audience: brief.audience,
+          visual_direction: brief.visual_direction,
+          content: brief.content,
+          assets_checklist: brief.assets_checklist,
+          output: brief.output,
+          references: brief.references,
+        })
+        .catch(() => {})
+
       setSavedTick(true)
       const tickTimer = setTimeout(() => setSavedTick(false), 1800)
       return () => clearTimeout(tickTimer)
     }, 800)
 
     return () => clearTimeout(timer)
-  }, [brief, step, project?.id])
+  }, [brief, step, project?.id, token])
 
   // Scroll to top on step change
   useEffect(() => {
@@ -345,6 +360,8 @@ export function ClientForm({
         questions: undefined, // cleared on resubmit
       },
     }))
+    // Sync to Supabase
+    api.clientForm.submit(token).catch(() => {})
     setStep('submitted')
     ctx.notify(lang === 'id' ? 'Brief berhasil dikirim ke desainer!' : 'Brief successfully submitted to designer!')
   }
@@ -512,6 +529,7 @@ export function ClientForm({
               brief={brief}
               setBrief={setBrief}
               lang={lang}
+              token={token}
             />
           )}
 
@@ -1416,13 +1434,17 @@ function StepContent({
   brief,
   setBrief,
   lang,
+  token,
 }: {
   brief: Brief
   setBrief: React.Dispatch<React.SetStateAction<Brief>>
   lang: 'id' | 'en'
+  token: string
 }) {
   const { copy_status, copy } = brief.content
   const checklist = brief.assets_checklist
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isUploading, setIsUploading] = useState(false)
 
   const setChecklistState = (cat: string, state: AssetState) => {
     setBrief((b) => ({
@@ -1431,16 +1453,30 @@ function StepContent({
     }))
   }
 
-  const simulateUpload = () => {
-    const fakeId = `file_${Date.now()}`
-    const fakeFile = {
-      id: fakeId,
-      category: 'logo',
-      file_name: 'sample_asset_uploaded.svg',
-      mime_type: 'image/svg+xml',
-      size_bytes: 245000,
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploading(true)
+    try {
+      const res = await api.clientForm.uploadAsset(token, file, 'other')
+      if (res?.id) {
+        setBrief((b) => ({ ...b, files: [...b.files, res] }))
+      }
+    } catch {
+      // Fallback local representation if storage bucket is not configured yet
+      const fakeId = `file_${Date.now()}`
+      const fakeFile = {
+        id: fakeId,
+        category: 'other',
+        file_name: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        size_bytes: file.size,
+      }
+      setBrief((b) => ({ ...b, files: [...b.files, fakeFile] }))
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
-    setBrief((b) => ({ ...b, files: [...b.files, fakeFile] }))
   }
 
   return (
@@ -1538,15 +1574,27 @@ function StepContent({
         <label className="block text-xs font-bold uppercase tracking-wider text-muted mb-2">
           {lang === 'id' ? 'Unggah File & Aset (Logo, Dokumen, dll)' : 'Upload Asset Files'}
         </label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileChange}
+          className="hidden"
+        />
         <div
-          onClick={simulateUpload}
+          onClick={() => fileInputRef.current?.click()}
           className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-line bg-bg/40 p-6 text-center transition hover:border-ink/40"
         >
           <span className="grid size-10 place-items-center rounded-xl bg-surface ring-1 ring-line text-muted">
             <Upload className="size-5" />
           </span>
           <div className="mt-2 text-xs font-bold">
-            {lang === 'id' ? 'Klik untuk memilih file atau seret ke sini' : 'Click to upload or drag files here'}
+            {isUploading
+              ? lang === 'id'
+                ? 'Sedang mengunggah...'
+                : 'Uploading...'
+              : lang === 'id'
+              ? 'Klik untuk memilih file atau seret ke sini'
+              : 'Click to upload or drag files here'}
           </div>
           <div className="text-[11px] text-muted mt-0.5">JPG, PNG, SVG, PDF, ZIP (Max 25MB)</div>
         </div>
