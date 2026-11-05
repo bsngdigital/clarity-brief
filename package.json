@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "pnpm --prefix server dev",
     "build": "vite build",
     "preview": "vite preview",
     "format": "oxfmt"
