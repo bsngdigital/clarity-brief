@@ -1,0 +1,10 @@
+{
+  "description": "A sleek, responsive application that helps users accomplish the core tasks outlined in the product requirements with clear navigation and intuitive interactions.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
