@@ -81,32 +81,45 @@ export function Dashboard({ ctx }: { ctx: Ctx }) {
           <div className="grid gap-4 lg:grid-cols-2">
             {pending.map((p) => {
               const c = clientOf(p.client_id)
-              const b = p.brief!
+              const b = p.brief
+              const styles = Array.isArray(b?.visual_direction?.styles) ? b.visual_direction.styles : []
+              const moods = Array.isArray(b?.visual_direction?.moods) ? b.visual_direction.moods : []
+              const filesCount = Array.isArray(b?.files) ? b.files.length : 0
+              const refCount = Array.isArray(b?.references) ? b.references.length : 0
+
               return (
                 <div key={p.id} className="flex flex-col overflow-hidden rounded-[20px] border border-line bg-surface sm:flex-row">
-                  <div className="grid h-40 grid-cols-3 sm:h-auto sm:w-56 sm:grid-cols-1 sm:grid-rows-3">
-                    {b.visual_direction.styles.map((s) => (
-                      <StyleThumb key={s} id={s} className="h-full" />
-                    ))}
+                  <div className="grid h-40 grid-cols-3 sm:h-auto sm:w-56 sm:grid-cols-1 sm:grid-rows-3 bg-bg">
+                    {styles.length > 0 ? (
+                      styles.slice(0, 3).map((s) => (
+                        <StyleThumb key={s} id={s} className="h-full" />
+                      ))
+                    ) : (
+                      <div className="col-span-3 sm:col-span-1 sm:row-span-3 grid place-items-center p-4 text-xs font-semibold text-muted text-center">
+                        Awaiting visual style
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-1 flex-col p-6">
                     <div className="text-xs font-semibold text-muted">
-                      {c?.company} · submitted {formatDate(b.submitted_at)}
+                      {c?.company ?? c?.name ?? 'Client'} · submitted {formatDate(b?.submitted_at)}
                     </div>
                     <h3 className="mt-1 text-xl font-bold tracking-tight">{p.name}</h3>
-                    <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted">“{b.audience.target}”</p>
-                    <div className="mt-4 flex flex-wrap gap-1.5">
-                      {b.visual_direction.moods.map((m) => (
-                        <span key={m} className="rounded-full bg-bg px-2.5 py-1 text-xs font-medium capitalize ring-1 ring-line">
-                          {m}
-                        </span>
-                      ))}
-                    </div>
+                    <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted">“{b?.audience?.target || p.objective}”</p>
+                    {moods.length > 0 && (
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {moods.map((m) => (
+                          <span key={m} className="rounded-full bg-bg px-2.5 py-1 text-xs font-medium capitalize ring-1 ring-line">
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="mt-6 flex items-center gap-2">
                       <Button variant="primary" onClick={() => go({ name: 'project', id: p.id })}>
                         Review brief <ArrowRight className="size-4" />
                       </Button>
-                      <span className="text-xs text-muted">{b.files.length} files · {b.references.length} references</span>
+                      <span className="text-xs text-muted">{filesCount} files · {refCount} references</span>
                     </div>
                   </div>
                 </div>

@@ -9,16 +9,65 @@ function generateShareToken(): string {
   return crypto.randomBytes(24).toString('base64url')
 }
 
+// Normalize brief object to guarantee complete data structure and prevent null/undefined property crashes
+function normalizeBrief(brief: any) {
+  if (!brief) return null
+  const b = Array.isArray(brief) ? brief[0] : brief
+  if (!b) return null
+
+  return {
+    ...b,
+    version: b.version ?? 1,
+    audience: {
+      target: b.audience?.target ?? '',
+      age_range: b.audience?.age_range ?? '25-34',
+      demographic: b.audience?.demographic ?? '',
+      desired_reaction: Array.isArray(b.audience?.desired_reaction) ? b.audience.desired_reaction : [],
+    },
+    visual_direction: {
+      styles: Array.isArray(b.visual_direction?.styles) ? b.visual_direction.styles : [],
+      styles_undecided: Boolean(b.visual_direction?.styles_undecided),
+      avoid_styles: Array.isArray(b.visual_direction?.avoid_styles) ? b.visual_direction.avoid_styles : [],
+      moods: Array.isArray(b.visual_direction?.moods) ? b.visual_direction.moods : [],
+      likes: Array.isArray(b.visual_direction?.likes) ? b.visual_direction.likes : [],
+      avoid: Array.isArray(b.visual_direction?.avoid) ? b.visual_direction.avoid : [],
+      avoid_note: b.visual_direction?.avoid_note ?? '',
+      colors: {
+        mode: b.visual_direction?.colors?.mode ?? 'suggest',
+        palette: Array.isArray(b.visual_direction?.colors?.palette) ? b.visual_direction.colors.palette : [],
+        note: b.visual_direction?.colors?.note ?? '',
+      },
+      typography: b.visual_direction?.typography ?? 'not_sure',
+    },
+    content: {
+      copy_status: b.content?.copy_status ?? 'will_provide',
+      copy: b.content?.copy ?? '',
+    },
+    assets_checklist: b.assets_checklist && typeof b.assets_checklist === 'object' ? b.assets_checklist : {},
+    files: Array.isArray(b.files) ? b.files : [],
+    references: Array.isArray(b.references) ? b.references : [],
+    output: b.output && typeof b.output === 'object' ? b.output : {},
+    questions: Array.isArray(b.questions) ? b.questions : [],
+  }
+}
+
 // GET /api/projects — List all projects
 projectsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
   try {
     const { data, error } = await supabase
       .from('projects')
-      .select('*, client:clients(id, name, company), brief:briefs(id, version, submitted_at, approved_at)')
+      .select('*, client:clients(id, name, company), brief:briefs(*)')
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    res.json(data)
+
+    const projects = (data || []).map((p: any) => ({
+      ...p,
+      deliverables: Array.isArray(p.deliverables) ? p.deliverables : [],
+      brief: normalizeBrief(p.brief),
+    }))
+
+    res.json(projects)
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -92,18 +141,23 @@ projectsRouter.get('/:id', async (req: Request, res: Response): Promise<void> =>
       return
     }
 
-    // Also fetch references and assets for the brief
-    if (project.brief) {
+    const brief = normalizeBrief(project.brief)
+
+    // Also fetch references, assets, and reviews for the brief
+    if (brief) {
       const [refRes, assetRes, reviewsRes] = await Promise.all([
-        supabase.from('references').select('*').eq('brief_id', project.brief.id),
-        supabase.from('assets').select('*').eq('brief_id', project.brief.id),
-        supabase.from('reviews').select('*, questions:review_questions(*)').eq('brief_id', project.brief.id).order('created_at', { ascending: false }),
+        supabase.from('references').select('*').eq('brief_id', brief.id),
+        supabase.from('assets').select('*').eq('brief_id', brief.id),
+        supabase.from('reviews').select('*, questions:review_questions(*)').eq('brief_id', brief.id).order('created_at', { ascending: false }),
       ])
 
-      project.brief.references = refRes.data || []
-      project.brief.files = assetRes.data || []
-      project.brief.reviews = reviewsRes.data || []
+      brief.references = refRes.data || []
+      brief.files = assetRes.data || []
+      brief.reviews = reviewsRes.data || []
     }
+
+    project.deliverables = Array.isArray(project.deliverables) ? project.deliverables : []
+    project.brief = brief
 
     res.json(project)
   } catch (err: any) {
@@ -201,6 +255,12 @@ projectsRouter.post('/:id/review', async (req: Request, res: Response): Promise<
       return
     }
 
+    const brief = Array.isArray(project.brief) ? project.brief[0] : project.brief
+    if (!brief) {
+      res.status(404).json({ error: 'Associated brief not found' })
+      return
+    }
+
     if (decision === 'approved') {
       // Approve Brief
       await Promise.all([
@@ -208,8 +268,8 @@ projectsRouter.post('/:id/review', async (req: Request, res: Response): Promise<
         supabase.from('briefs').update({ approved_at: new Date().toISOString() }).eq('project_id', id),
         supabase.from('reviews').insert([
           {
-            brief_id: project.brief.id,
-            version: project.brief.version,
+            brief_id: brief.id,
+            version: brief.version ?? 1,
             decision: 'approved',
             internal_note,
           },
@@ -225,8 +285,8 @@ projectsRouter.post('/:id/review', async (req: Request, res: Response): Promise<
         .from('reviews')
         .insert([
           {
-            brief_id: project.brief.id,
-            version: project.brief.version,
+            brief_id: brief.id,
+            version: brief.version ?? 1,
             decision: 'needs_clarification',
             internal_note,
           },
@@ -253,7 +313,7 @@ projectsRouter.post('/:id/review', async (req: Request, res: Response): Promise<
 
     if (decision === 'reopen') {
       // Reopen approved brief -> bumps version (PRD D6)
-      const newVersion = (project.brief.version || 1) + 1
+      const newVersion = (brief.version || 1) + 1
       await Promise.all([
         supabase.from('projects').update({ status: 'needs_clarification' }).eq('id', id),
         supabase.from('briefs').update({ version: newVersion, approved_at: null }).eq('project_id', id),

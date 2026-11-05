@@ -3,9 +3,12 @@ import { STYLES, TYPE_LABEL, formatDate, type Client, type Project } from '../da
 import { StatusBadge, StyleThumb, cx } from '../ui'
 
 export function ProjectCard({ project, client, onOpen }: { project: Project; client?: Client; onOpen: () => void }) {
-  const styles = project.brief?.visual_direction.styles ?? []
-  const undecided = project.brief?.visual_direction.styles_undecided
-  const styleNames = styles.map((s) => STYLES.find((x) => x.id === s)?.name).join(' · ')
+  const styles = Array.isArray(project.brief?.visual_direction?.styles) ? project.brief.visual_direction.styles : []
+  const undecided = Boolean(project.brief?.visual_direction?.styles_undecided)
+  const styleNames = styles
+    .map((s) => STYLES.find((x) => x.id === s)?.name)
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <button

@@ -312,17 +312,18 @@ function Questions({ b }: { b: Brief }) {
   )
 }
 
-function StyleTiles({ ids }: { ids: Brief['visual_direction']['styles'] }) {
+function StyleTiles({ ids }: { ids?: Brief['visual_direction']['styles'] }) {
+  const safeIds = Array.isArray(ids) ? ids : []
   return (
     <div className="grid grid-cols-3 gap-3 sm:max-w-lg">
-      {ids.map((s) => {
-        const st = STYLES.find((x) => x.id === s)!
+      {safeIds.map((s) => {
+        const st = STYLES.find((x) => x.id === s)
         return (
           <div key={s} className="overflow-hidden rounded-2xl border border-line">
             <StyleThumb id={s} className="aspect-[4/3]" />
             <div className="px-3 py-2">
-              <div className="text-sm font-bold">{st.name}</div>
-              <div className="truncate text-xs text-muted">{st.desc}</div>
+              <div className="text-sm font-bold">{st?.name ?? s}</div>
+              <div className="truncate text-xs text-muted">{st?.desc ?? ''}</div>
             </div>
           </div>
         )
@@ -332,7 +333,19 @@ function StyleTiles({ ids }: { ids: Brief['visual_direction']['styles'] }) {
 }
 
 function Requirement({ p, b }: { p: Project; b: Brief }) {
-  const vd = b.visual_direction
+  const vd = b?.visual_direction ?? {
+    styles: [],
+    styles_undecided: false,
+    avoid_styles: [],
+    moods: [],
+    likes: [],
+    avoid: [],
+    colors: { mode: 'suggest', palette: [] },
+  }
+  const aud = b?.audience ?? { target: '', age_range: 'mixed', desired_reaction: [] }
+  const content = b?.content ?? { copy_status: 'will_provide' }
+  const refCount = Array.isArray(b?.references) ? b.references.length : 0
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
       <div>
@@ -340,30 +353,30 @@ function Requirement({ p, b }: { p: Project; b: Brief }) {
         <div className="space-y-4">
           <SectionCard title="Audience">
             <Row label="Target">
-              <p className="text-[15px] leading-relaxed">{b.audience.target}</p>
+              <p className="text-[15px] leading-relaxed">{aud.target || p.objective}</p>
             </Row>
             <Row label="Age range">
-              <Chip>{b.audience.age_range === 'mixed' ? 'Mixed ages' : b.audience.age_range}</Chip>
+              <Chip>{aud.age_range === 'mixed' ? 'Mixed ages' : aud.age_range || 'Mixed'}</Chip>
             </Row>
-            {b.audience.demographic && (
+            {aud.demographic && (
               <Row label="Demographic">
-                <p className="text-[15px] text-ink/85">{b.audience.demographic}</p>
+                <p className="text-[15px] text-ink/85">{aud.demographic}</p>
               </Row>
             )}
             <Row label="Desired reaction">
-              <Chips items={b.audience.desired_reaction} tone="accent" />
+              <Chips items={aud.desired_reaction || []} tone="accent" />
             </Row>
           </SectionCard>
 
           <SectionCard title="Visual direction">
             <Row label="Styles">{vd.styles_undecided ? <NotSure /> : <StyleTiles ids={vd.styles} />}</Row>
-            <Row label="Mood">{vd.moods_undecided ? <NotSure /> : <Chips items={vd.moods} tone="accent" />}</Row>
+            <Row label="Mood">{vd.moods_undecided ? <NotSure /> : <Chips items={vd.moods || []} tone="accent" />}</Row>
             <Row label="Likes">
-              <Chips items={vd.likes} />
+              <Chips items={vd.likes || []} />
             </Row>
             <Row label="Avoid">
               <div className="space-y-3">
-                <Chips items={[...vd.avoid_styles, ...vd.avoid]} tone="avoid" />
+                <Chips items={[...(vd.avoid_styles || []), ...(vd.avoid || [])]} tone="avoid" />
                 {vd.avoid_note && <p className="border-l-2 border-danger/40 pl-3 text-sm text-ink/80 italic">“{vd.avoid_note}”</p>}
               </div>
             </Row>
@@ -373,17 +386,17 @@ function Requirement({ p, b }: { p: Project; b: Brief }) {
             <ColorBlock b={b} />
           </SectionCard>
 
-          <SectionCard title={`References · ${b.references.length}`}>
+          <SectionCard title={`References · ${refCount}`}>
             <References b={b} />
           </SectionCard>
 
           <SectionCard title="Content">
             <Row label="Copy status">
-              <Chip tone={b.content.copy_status === 'need_help' ? 'neutral' : 'default'}>{humanize(b.content.copy_status)}</Chip>
+              <Chip tone={content.copy_status === 'need_help' ? 'neutral' : 'default'}>{humanize(content.copy_status)}</Chip>
             </Row>
-            {b.content.copy && (
+            {content.copy && (
               <Row label="Copy">
-                <p className="rounded-xl bg-bg p-4 text-[15px] leading-relaxed">{b.content.copy}</p>
+                <p className="rounded-xl bg-bg p-4 text-[15px] leading-relaxed">{content.copy}</p>
               </Row>
             )}
           </SectionCard>
@@ -425,15 +438,23 @@ function Requirement({ p, b }: { p: Project; b: Brief }) {
 }
 
 function ColorBlock({ b }: { b: Brief }) {
-  const c = b.visual_direction.colors
-  const modeLabel = { brand_colors: 'Follow existing brand', suggest: 'Designer suggests', custom: 'Custom palette' }[c.mode]
+  const c = b?.visual_direction?.colors ?? { mode: 'suggest', palette: [] }
+  const modeLabels: Record<string, string> = {
+    brand_colors: 'Follow existing brand',
+    suggest: 'Designer suggests',
+    custom: 'Custom palette',
+  }
+  const modeLabel = modeLabels[c.mode] || 'Designer suggests'
+  const palette = Array.isArray(c.palette) ? c.palette : []
+  const typography = b?.visual_direction?.typography
+
   return (
     <>
       <Row label="Mode">{c.mode === 'suggest' ? <NotSure /> : <Chip>{modeLabel}</Chip>}</Row>
-      {c.palette.length > 0 && (
+      {palette.length > 0 && (
         <Row label="Palette">
           <div className="flex flex-wrap gap-3">
-            {c.palette.map((hex) => (
+            {palette.map((hex) => (
               <div key={hex} className="text-center">
                 <div className="size-14 rounded-2xl ring-1 ring-ink/10" style={{ background: hex }} />
                 <div className="mt-1.5 font-mono text-[11px] text-muted uppercase">{hex}</div>
@@ -444,10 +465,10 @@ function ColorBlock({ b }: { b: Brief }) {
         </Row>
       )}
       <Row label="Typography">
-        {!b.visual_direction.typography || b.visual_direction.typography === 'not_sure' ? (
+        {!typography || typography === 'not_sure' ? (
           <NotSure />
         ) : (
-          <span className={cx('text-2xl', b.visual_direction.typography === 'serif' && 'font-serif')}>Aa · {humanize(b.visual_direction.typography)}</span>
+          <span className={cx('text-2xl', typography === 'serif' && 'font-serif')}>Aa · {humanize(typography)}</span>
         )}
       </Row>
     </>
@@ -455,10 +476,11 @@ function ColorBlock({ b }: { b: Brief }) {
 }
 
 function References({ b }: { b: Brief }) {
-  if (!b.references.length) return <p className="text-sm text-muted">No references added.</p>
+  const references = Array.isArray(b?.references) ? b.references : []
+  if (!references.length) return <p className="text-sm text-muted">No references added.</p>
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      {b.references.map((r) =>
+      {references.map((r) =>
         r.kind === 'image' ? (
           <figure key={r.id} className="overflow-hidden rounded-2xl border border-line">
             <img src={r.url} alt={r.note ?? 'Client reference'} className="aspect-square w-full object-cover" loading="lazy" />
@@ -479,14 +501,15 @@ function References({ b }: { b: Brief }) {
 }
 
 function Output({ b }: { b: Brief }) {
-  const g = b.output.graphic
-  const u = b.output.uiux
+  const g = b?.output?.graphic
+  const u = b?.output?.uiux
+  if (!g && !u) return null
   return (
     <>
       {g && (
         <>
           <Row label="Graphic usage">
-            <Chips items={g.usage} />
+            <Chips items={g.usage || []} />
           </Row>
           {g.social_format && (
             <Row label="Social format">
@@ -501,17 +524,17 @@ function Output({ b }: { b: Brief }) {
             </Row>
           )}
           <Row label="Graphic formats">
-            <Chips items={g.final_formats.map((f) => f.toUpperCase())} />
+            <Chips items={(g.final_formats || []).map((f) => f.toUpperCase())} />
           </Row>
         </>
       )}
       {u && (
         <>
           <Row label="UI/UX target">
-            <Chip>{humanize(u.design_target)}</Chip>
+            <Chip>{humanize(u.design_target || 'App')}</Chip>
           </Row>
           <Row label="Platforms">
-            <Chips items={u.platforms} />
+            <Chips items={u.platforms || []} />
           </Row>
           <Row label="Existing product">
             {u.existing_product ? (
@@ -522,9 +545,9 @@ function Output({ b }: { b: Brief }) {
               <span className="text-[15px]">None — new product</span>
             )}
           </Row>
-          <Row label="Design system">{u.design_system === 'not_sure' ? <NotSure /> : <Chip>{humanize(u.design_system)}</Chip>}</Row>
+          <Row label="Design system">{u.design_system === 'not_sure' || !u.design_system ? <NotSure /> : <Chip>{humanize(u.design_system)}</Chip>}</Row>
           <Row label="UI/UX formats">
-            <Chips items={u.final_formats.map((f) => (f === 'figma' ? 'Figma' : f.toUpperCase()))} />
+            <Chips items={(u.final_formats || []).map((f) => (f === 'figma' ? 'Figma' : f.toUpperCase()))} />
           </Row>
         </>
       )}
@@ -541,8 +564,10 @@ const ASSET_TONE = {
 }
 
 function Assets({ b }: { b: Brief }) {
-  const counts = Object.values(b.assets_checklist).reduce<Record<string, number>>((a, s) => ({ ...a, [s]: (a[s] ?? 0) + 1 }), {})
-  const total = b.files.reduce((s, f) => s + f.size_bytes, 0)
+  const checklist = b?.assets_checklist && typeof b.assets_checklist === 'object' ? b.assets_checklist : {}
+  const files = Array.isArray(b?.files) ? b.files : []
+  const counts = Object.values(checklist).reduce<Record<string, number>>((a, s) => ({ ...a, [s]: (a[s] ?? 0) + 1 }), {})
+  const total = files.reduce((s, f) => s + (f?.size_bytes || 0), 0)
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
       <SectionCard
@@ -555,7 +580,7 @@ function Assets({ b }: { b: Brief }) {
       >
         <ul className="divide-y divide-line">
           {ASSET_CATEGORIES.map((c) => {
-            const s = b.assets_checklist[c] ?? 'not_applicable'
+            const s = checklist[c] ?? 'not_applicable'
             return (
               <li key={c} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                 <span className={cx('text-[15px]', s === 'not_applicable' && 'text-muted')}>{humanize(c)}</span>
@@ -566,16 +591,16 @@ function Assets({ b }: { b: Brief }) {
         </ul>
       </SectionCard>
       <SectionCard
-        title={`Files · ${b.files.length}`}
+        title={`Files · ${files.length}`}
         action={<span className="text-xs font-semibold text-muted">{formatBytes(total)} of 200 MB</span>}
       >
         <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-bg">
           <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(2, (total / 200_000_000) * 100)}%` }} />
         </div>
-        {b.files.length ? (
+        {files.length ? (
           <ul className="space-y-2">
-            {b.files.map((f) => {
-              const img = f.mime_type.startsWith('image/')
+            {files.map((f) => {
+              const img = f.mime_type?.startsWith('image/')
               const Icon = img ? FileImage : FileText
               return (
                 <li key={f.id} className="flex items-center gap-3 rounded-2xl border border-line p-3">
@@ -609,9 +634,13 @@ function Assets({ b }: { b: Brief }) {
 /* ---------------- Review ---------------- */
 
 function Review({ p, b, ctx, onApprove, onClarify }: { p: Project; b: Brief; ctx: Ctx; onApprove: () => void; onClarify: () => void }) {
-  const [text, setText] = useState(b.designer_interpretation ?? '')
-  const dirty = text !== (b.designer_interpretation ?? '')
+  const [text, setText] = useState(b?.designer_interpretation ?? '')
+  const dirty = text !== (b?.designer_interpretation ?? '')
   const canDecide = p.status === 'submitted'
+  const vd = b?.visual_direction
+  const moods = Array.isArray(vd?.moods) ? vd.moods : []
+  const avoids = [...(vd?.avoid_styles || []), ...(vd?.avoid || [])].slice(0, 5)
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
       <div className="space-y-4">
@@ -649,11 +678,11 @@ function Review({ p, b, ctx, onApprove, onClarify }: { p: Project; b: Brief; ctx
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <div className="mb-2 text-xs font-bold tracking-wide text-muted uppercase">Feel</div>
-              <Chips items={b.visual_direction.moods} tone="accent" />
+              <Chips items={moods} tone="accent" />
             </div>
             <div>
               <div className="mb-2 text-xs font-bold tracking-wide text-muted uppercase">Avoid</div>
-              <Chips items={[...b.visual_direction.avoid_styles, ...b.visual_direction.avoid].slice(0, 5)} tone="avoid" />
+              <Chips items={avoids} tone="avoid" />
             </div>
           </div>
         </SectionCard>
@@ -685,7 +714,18 @@ function Review({ p, b, ctx, onApprove, onClarify }: { p: Project; b: Brief; ctx
 /* ---------------- Final Brief ---------------- */
 
 function FinalBrief({ p, b }: { p: Project; b: Brief }) {
-  const vd = b.visual_direction
+  const vd = b?.visual_direction ?? {
+    styles: [],
+    styles_undecided: false,
+    avoid_styles: [],
+    moods: [],
+    likes: [],
+    avoid: [],
+    colors: { mode: 'suggest', palette: [] },
+  }
+  const aud = b?.audience ?? { target: '', age_range: 'mixed', desired_reaction: [] }
+  const checklist = b?.assets_checklist && typeof b.assets_checklist === 'object' ? b.assets_checklist : {}
+
   return (
     <article className="mx-auto max-w-4xl overflow-hidden rounded-[24px] border border-line bg-surface">
       <header className="relative overflow-hidden border-b border-line px-6 py-10 sm:px-12">
@@ -693,9 +733,9 @@ function FinalBrief({ p, b }: { p: Project; b: Brief }) {
         <div className="relative">
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E7F3EA] px-2.5 py-1 text-[#2F6B41]">
-              <Lock className="size-3" /> Approved {formatDate(b.approved_at)}
+              <Lock className="size-3" /> Approved {formatDate(b?.approved_at)}
             </span>
-            <span>Design Brief · v{b.version}</span>
+            <span>Design Brief · v{b?.version ?? 1}</span>
           </div>
           <h2 className="mt-5 text-[32px] leading-[1.05] font-extrabold tracking-[-0.03em] sm:text-5xl">{p.name}</h2>
           <p className="mt-4 max-w-2xl font-serif text-2xl leading-snug text-ink/80 italic">{p.objective}</p>
@@ -707,7 +747,7 @@ function FinalBrief({ p, b }: { p: Project; b: Brief }) {
               <span className="text-muted">Type</span> <b>{TYPE_LABEL[p.type]}</b>
             </span>
             <span>
-              <span className="text-muted">Deliverables</span> <b>{p.deliverables.join(', ')}</b>
+              <span className="text-muted">Deliverables</span> <b>{(p.deliverables || []).join(', ')}</b>
             </span>
           </div>
         </div>
@@ -715,23 +755,23 @@ function FinalBrief({ p, b }: { p: Project; b: Brief }) {
       <div className="px-6 py-8 sm:px-12">
         <Row label="Audience">
           <p className="text-[15px] leading-relaxed">
-            {b.audience.target}. <span className="text-muted">Age {b.audience.age_range}{b.audience.demographic ? ` · ${b.audience.demographic}` : ''}.</span>
+            {aud.target || p.objective}. <span className="text-muted">Age {aud.age_range || 'Mixed'}{aud.demographic ? ` · ${aud.demographic}` : ''}.</span>
           </p>
           <div className="mt-3">
-            <Chips items={b.audience.desired_reaction} tone="accent" />
+            <Chips items={aud.desired_reaction || []} tone="accent" />
           </div>
         </Row>
         <Row label="Visual direction">
-          {vd.styles_undecided ? <NotSure /> : <StyleTiles ids={vd.styles} />}
+          {vd.styles_undecided ? <NotSure /> : <StyleTiles ids={vd.styles || []} />}
           <div className="mt-3">
-            <Chips items={vd.moods} tone="accent" />
+            <Chips items={vd.moods || []} tone="accent" />
           </div>
         </Row>
         <Row label="Preferences">
-          <Chips items={vd.likes} />
+          <Chips items={vd.likes || []} />
         </Row>
         <Row label="Avoid">
-          <Chips items={[...vd.avoid_styles, ...vd.avoid]} tone="avoid" />
+          <Chips items={[...(vd.avoid_styles || []), ...(vd.avoid || [])]} tone="avoid" />
           {vd.avoid_note && <p className="mt-2 text-sm italic">“{vd.avoid_note}”</p>}
         </Row>
         <ColorBlock b={b} />
@@ -739,12 +779,12 @@ function FinalBrief({ p, b }: { p: Project; b: Brief }) {
           <References b={b} />
         </Row>
         <Row label="Content">
-          <Chip>{humanize(b.content.copy_status)}</Chip>
-          {b.content.copy && <p className="mt-2 text-[15px]">{b.content.copy}</p>}
+          <Chip>{humanize(b?.content?.copy_status || 'will_provide')}</Chip>
+          {b?.content?.copy && <p className="mt-2 text-[15px]">{b.content.copy}</p>}
         </Row>
         <Row label="Assets">
           <div className="flex flex-wrap gap-1.5">
-            {Object.entries(b.assets_checklist)
+            {Object.entries(checklist)
               .filter(([, s]) => s !== 'not_applicable')
               .map(([c, s]) => (
                 <span key={c} className={cx('rounded-full px-3 py-1 text-[13px] font-medium', ASSET_TONE[s])}>
@@ -755,7 +795,7 @@ function FinalBrief({ p, b }: { p: Project; b: Brief }) {
         </Row>
         <Output b={b} />
       </div>
-      {b.designer_interpretation && (
+      {b?.designer_interpretation && (
         <footer className="m-4 mt-0 rounded-[20px] bg-ink p-6 text-white sm:m-6 sm:mt-0 sm:p-8">
           <div className="flex items-center gap-2 text-xs font-bold tracking-wide text-primary uppercase">
             <Sparkles className="size-3.5" /> Designer interpretation · internal

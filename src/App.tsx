@@ -102,7 +102,33 @@ export default function App() {
           setClients(liveClients)
         }
         if (Array.isArray(liveProjects) && liveProjects.length > 0) {
-          setProjects(liveProjects)
+          const safeProjects: Project[] = liveProjects.map((p) => ({
+            ...p,
+            deliverables: Array.isArray(p.deliverables) ? p.deliverables : [],
+            brief: p.brief
+              ? {
+                  ...p.brief,
+                  audience: p.brief.audience ?? { target: '', age_range: 'mixed', desired_reaction: [] },
+                  visual_direction: {
+                    styles: Array.isArray(p.brief.visual_direction?.styles) ? p.brief.visual_direction.styles : [],
+                    styles_undecided: Boolean(p.brief.visual_direction?.styles_undecided),
+                    avoid_styles: Array.isArray(p.brief.visual_direction?.avoid_styles) ? p.brief.visual_direction.avoid_styles : [],
+                    moods: Array.isArray(p.brief.visual_direction?.moods) ? p.brief.visual_direction.moods : [],
+                    likes: Array.isArray(p.brief.visual_direction?.likes) ? p.brief.visual_direction.likes : [],
+                    avoid: Array.isArray(p.brief.visual_direction?.avoid) ? p.brief.visual_direction.avoid : [],
+                    avoid_note: p.brief.visual_direction?.avoid_note ?? '',
+                    colors: p.brief.visual_direction?.colors ?? { mode: 'suggest', palette: [] },
+                    typography: p.brief.visual_direction?.typography ?? 'not_sure',
+                  },
+                  content: p.brief.content ?? { copy_status: 'will_provide' },
+                  assets_checklist: p.brief.assets_checklist ?? {},
+                  files: Array.isArray(p.brief.files) ? p.brief.files : [],
+                  references: Array.isArray(p.brief.references) ? p.brief.references : [],
+                  output: p.brief.output ?? {},
+                }
+              : undefined,
+          }))
+          setProjects(safeProjects)
         }
       } catch (err) {
         console.warn('Backend not running or offline, using local state.', err)
