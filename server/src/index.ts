@@ -104,9 +104,13 @@ app.use((err: any, _req: Request, res: Response, _next: any) => {
   res.status(500).json({ error: err?.message || 'Internal Server Error' })
 })
 
-app.listen(PORT, () => {
+const HOST = '0.0.0.0'
+
+app.listen(Number(PORT), HOST, () => {
   console.log(`===============================================`)
-  console.log(`🚀 Clarity Backend Server running on port ${PORT}`)
+  console.log(`🚀 Clarity Backend Server running on http://${HOST}:${PORT}`)
+  console.log(`📡 Local: http://localhost:${PORT}/`)
+  console.log(`📡 IP: http://127.0.0.1:${PORT}/`)
   console.log(`📡 Health Check: http://localhost:${PORT}/api/health`)
   console.log(`🔌 Supabase URL: ${process.env.SUPABASE_URL || 'Not configured'}`)
   console.log(`===============================================`)
